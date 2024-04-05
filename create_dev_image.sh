@@ -59,6 +59,43 @@ buildah run $bdr ${package_manage_add} ${deps}
 # setup curl source derived from branch or tag
 echo "get curl source"
 buildah run $bdr mkdir /src
+
+# Install quictls, nghttp3, ngtcp2
+# See: https://curl.se/docs/http3.html
+if [[ "$dist" =~ .*"debian".* ]]; then
+  # build quictls
+  buildah config --workingdir /src/ $bdr
+  buildah run $bdr git clone --depth 1 -b openssl-3.1.4+quic https://github.com/quictls/openssl
+  buildah config --workingdir /src/openssl $bdr
+  buildah run $bdr ./config enable-tls1_3 --prefix=/usr
+  buildah run $bdr make -j$(nproc)
+  buildah run $bdr make install
+  buildah run $bdr make clean
+
+  # build nghttp3
+  buildah config --workingdir /src/ $bdr
+  buildah run $bdr git clone -b v1.1.0 https://github.com/ngtcp2/nghttp3
+  buildah config --workingdir /src/nghttp3 $bdr
+  buildah run $bdr git submodule update --init
+  buildah run $bdr autoreconf -fi
+  buildah run $bdr ./configure --prefix=/usr --enable-lib-only
+  buildah run $bdr make -j$(nproc)
+  buildah run $bdr make install
+  buildah run $bdr make clean
+  
+  # build ngtcp2
+  buildah config --workingdir /src/ $bdr
+  buildah run $bdr git clone -b v1.2.0 https://github.com/ngtcp2/ngtcp2
+  buildah config --workingdir /src/ngtcp2 $bdr
+  buildah run $bdr autoreconf -fi
+  buildah run $bdr ./configure PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/lib64/pkgconfig LDFLAGS="-Wl,-rpath,/usr/lib" --prefix=/usr --enable-lib-only
+  buildah run $bdr make -j$(nproc)
+  buildah run $bdr make install
+  buildah run $bdr make clean
+  
+  buildah config --workingdir / $bdr
+fi
+
 if [ "${branch_or_tag:0:4}" = "curl" ]; then
   # its a tag, retrieve release source
   buildah run $bdr /usr/bin/curl -L -o curl.tar.gz "https://github.com/curl/curl/releases/download/${branch_or_tag}/curl-${release_tag}.tar.gz"
@@ -77,7 +114,7 @@ fi
 
 # build curl
 buildah run $bdr autoreconf -fi
-buildah run $bdr ./configure ${build_opts}
+buildah run --env "LDFLAGS=-Wl,-rpath,/usr/lib64" $bdr ./configure ${build_opts}
 buildah run $bdr make -j$(nproc)
 
 # run tests
