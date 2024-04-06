@@ -127,6 +127,10 @@ fi
 
 # install curl in /usr/local
 buildah run $bdr make install  -j$(nproc)
+# set cwd to /
+buildah config --workingdir / $bdr
+# delete source code
+buildah run $bdr rm -rf /src
 
 # install useful dev deps¡
 buildah run $bdr python3 -m ensurepip
