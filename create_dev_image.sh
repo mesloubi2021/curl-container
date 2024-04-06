@@ -123,7 +123,10 @@ if [[ $run_tests -eq 1 ]]; then
 fi
 
 # install curl in /build
-buildah run $bdr make DESTDIR="/build/" install  -j$(nproc)
+#buildah run $bdr make DESTDIR="/build/" install  -j$(nproc)
+
+# install curl in /usr/local
+buildah run $bdr make install  -j$(nproc)
 
 # install useful dev deps¡
 buildah run $bdr python3 -m ensurepip
