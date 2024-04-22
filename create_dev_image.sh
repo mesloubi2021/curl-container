@@ -28,6 +28,13 @@ run_tests=${8}
 if [[ -n $platform ]]; then
   echo "creating with platform=${platform}"
   bdr=$(buildah --platform ${platform} from ${dist})
+  # *** Allowing the image to be built for multiple platforms ***
+  # 1 - Extracting the part before the colon
+  image_name_without_tag="${image_name%%:*}"
+  # 2- Extracting the part after the colon
+  image_tag="${image_name#*:}"
+  # 3- Constructing the new image name
+  image_name="${image_name_without_tag}-$(echo ${platform} | tr / -):${image_tag}"
 else
   echo "creating ..."
   bdr=$(buildah from ${dist})
