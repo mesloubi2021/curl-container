@@ -56,6 +56,8 @@ fi
 if [[ "$dist" =~ .*"debian".* ]]; then
   package_manage_update="apt-get update"
   package_manage_add="apt-get -y install "
+  package_manager_remove="apt-get -y remove "
+  package_manager_clean="apt-get -y clean"
 fi
 
 
@@ -74,7 +76,7 @@ if [[ "$dist" =~ .*"debian".* ]]; then
   buildah config --workingdir /src/ $bdr
   buildah run $bdr git clone --depth 1 -b openssl-3.1.4+quic https://github.com/quictls/openssl
   buildah config --workingdir /src/openssl $bdr
-  buildah run $bdr ./config enable-tls1_3 --prefix=/usr
+  buildah run $bdr ./config enable-tls1_3 --prefix=/usr/local --libdir=lib  # it'll be installed in /usr/local/lib or it'll end up in /usr/local/lib64, which isn't in LD_LIBRARY_PATH
   buildah run $bdr make -j$(nproc)
   buildah run $bdr make install
   buildah run $bdr make clean
@@ -85,7 +87,7 @@ if [[ "$dist" =~ .*"debian".* ]]; then
   buildah config --workingdir /src/nghttp3 $bdr
   buildah run $bdr git submodule update --init
   buildah run $bdr autoreconf -fi
-  buildah run $bdr ./configure --prefix=/usr --enable-lib-only
+  buildah run $bdr ./configure --prefix=/usr/local --enable-lib-only
   buildah run $bdr make -j$(nproc)
   buildah run $bdr make install
   buildah run $bdr make clean
@@ -95,7 +97,7 @@ if [[ "$dist" =~ .*"debian".* ]]; then
   buildah run $bdr git clone -b v1.2.0 https://github.com/ngtcp2/ngtcp2
   buildah config --workingdir /src/ngtcp2 $bdr
   buildah run $bdr autoreconf -fi
-  buildah run $bdr ./configure PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/lib64/pkgconfig LDFLAGS="-Wl,-rpath,/usr/lib" --prefix=/usr --enable-lib-only
+  buildah run $bdr ./configure PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/lib64/pkgconfig LDFLAGS="-Wl,-rpath,/usr/local/lib" --prefix=/usr/local --enable-lib-only
   buildah run $bdr make -j$(nproc)
   buildah run $bdr make install
   buildah run $bdr make clean
@@ -121,8 +123,10 @@ fi
 
 # build curl
 buildah run $bdr autoreconf -fi
-buildah run --env "LDFLAGS=-Wl,-rpath,/usr/lib64" $bdr ./configure ${build_opts}
+buildah run --env "LDFLAGS=-Wl,-rpath,/usr/local/lib" $bdr ./configure ${build_opts}
 buildah run $bdr make -j$(nproc)
+# clean curl
+buildah run $bdr make clean -j$(nproc)
 
 # run tests
 if [[ $run_tests -eq 1 ]]; then
@@ -133,14 +137,19 @@ fi
 #buildah run $bdr make DESTDIR="/build/" install  -j$(nproc)
 
 # install curl in /usr/local
-buildah run $bdr make install  -j$(nproc)
+buildah run $bdr make install -j$(nproc)
 # set cwd to /
 buildah config --workingdir / $bdr
 # delete source code
 buildah run $bdr rm -rf /src
+# delete distro-packaged curl
+buildah run $bdr ${package_manager_remove} "curl"
+buildah run $bdr ${package_manager_remove} "libcurl4"
+# clean downloaded packages
+buildah run $bdr ${package_manager_clean}
 
 # install useful dev deps¡
-buildah run $bdr python3 -m ensurepip
+#buildah run $bdr python3 -m ensurepip
 #buildah run $bdr pip3 --no-input install -r ./requirements.txt
 
 # label image
